@@ -4,6 +4,10 @@
 
 Codex reviews Claude's user-approved phase plan for technical correctness, then implements and verifies the agreed backend/API/data work. An approved architecture plan alone does not authorize implementation. All decisions, blockers, reviews, and handoffs use new, immutable Markdown files inside the active turn folder in `coordination/messages/`.
 
+## Code Comment Rule
+
+Codex adds concise English comments to every non-trivial implementation block it writes, explaining intent, invariant, contract, security boundary, or non-obvious tradeoff. This is mandatory for authorization/scope, validation, state transitions, data derivation, caching, retries, and phase-specific constraints. Do not add narration for self-evident assignments or syntax; comments must make future review and maintenance easier.
+
 ## Communication Protocol
 
 Never append a shared log to this file or edit another agent's message. Each user task or clearly separate work cycle gets `coordination/messages/turn-YYYYMMDD-NNN-short-topic/`. For every response or handoff in that cycle, create `YYYYMMDD-HHMMSS-FROM-TO-TYPE.md` inside its turn folder, including `From`, `To`, `Date/time` (ISO 8601 with timezone), `Status`, `In reply to`, evidence, and a required response. Read the relevant message chain in that folder before acting and reference the answered filename in the reply.

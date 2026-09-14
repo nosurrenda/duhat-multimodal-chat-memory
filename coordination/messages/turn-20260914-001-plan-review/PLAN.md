@@ -4,7 +4,7 @@
 - To: `Codex`
 - Date/time: `2026-09-14T17:50:00+07:00`
 - Status: `ARCHITECTURE_UPDATED`
-- Plan revision: `6`
+- Plan revision: `7`
 - In reply to: `20260914-161517-CODEX-CLAUDE-PHASE_REVIEW.md`
 
 ## Purpose
@@ -13,7 +13,7 @@ This is the approved architecture and cross-phase contract. Every value below is
 
 ## Independent Test Rule
 
-Antigravity owns an independent adversarial suite under `tests/antigravity/`. For every implemented phase, it derives tests from this architecture plan, the phase acceptance criteria, API contracts, and raw fixtures before relying on Codex's tests. Its suite must include black-box behavior, negative/security cases, boundary or malformed input, and regressions for fixed defects. Passing Codex-authored tests alone is never sufficient for phase verification. Codex may diagnose failures but may not weaken, skip, or edit Antigravity-owned assertions or fixtures; a product-contract change requires a documented new decision.
+Antigravity owns independent code review and an adversarial suite under `tests/antigravity/`. For every implemented phase, it reviews Codex's changed code against this architecture plan and the phase plan, then derives tests from those contracts, API behavior, and raw fixtures before relying on Codex's tests. Its suite must include black-box behavior, negative/security cases, boundary or malformed input, and regressions for fixed defects. Passing Codex-authored tests alone is never sufficient for phase verification. Codex may diagnose failures but may not weaken, skip, or edit Antigravity-owned assertions or fixtures; a product-contract change requires a documented new decision. Claude performs only the final plan-compliance review after Antigravity reports no unresolved code-review finding and passing independent tests.
 
 ---
 

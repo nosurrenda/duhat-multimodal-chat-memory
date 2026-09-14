@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -31,4 +32,11 @@ def test_env_fields_cannot_override_hashed_config() -> None:
 
 
 def test_env_is_ignored_by_git() -> None:
-    assert ".env" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", ".env"], cwd=ROOT, check=False
+    )
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    forbidden_suffixes = (".env", ".pem", ".key")
+    assert ignored.returncode == 0
+    assert ".env.example" in tracked
+    assert not [path for path in tracked if path.endswith(forbidden_suffixes)]

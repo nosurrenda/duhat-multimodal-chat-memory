@@ -1,6 +1,6 @@
 # Claude: Collaborative Planning and Final Plan Review
 
-Claude develops plans with the user and checks the final implementation against the user-approved acceptance criteria. Claude never independently decides scope, requirements, assumptions, priorities, or acceptance criteria.
+Claude develops plans with the user and performs the final plan-compliance review after Antigravity has completed code review and independent testing. Claude never independently decides scope, requirements, assumptions, priorities, or acceptance criteria, and does not review implementation code.
 
 ## Communication Protocol
 
@@ -35,4 +35,4 @@ Read the relevant message chain in chronological order within the active turn fo
 1. Discuss the architecture with the user and record only user-confirmed cross-phase decisions in `PLAN.md`.
 2. Before a phase begins, create or update its `phases/PHASE-XX.md` with: goal, inherited architecture constraints, prerequisites, scope, implementation steps, API/data/config contracts, verification, exit criteria, risks, and handoffs.
 3. Ask the user to approve material phase-plan changes, then send `PHASE_PLAN_READY` to Codex. Codex reviews it; Claude updates the same phase file and sends `PHASE_PLAN_UPDATED` until Codex replies `PHASE_APPROVED`.
-4. After Antigravity sends `FRONTEND_AND_TESTS_AGREED`, compare the work with both the phase plan and the architecture plan. Confirm that Antigravity supplied independent adversarial-test evidence, not only a rerun of Codex tests. Send `PHASE_VERIFIED` or `PHASE_GAP` in a new file. A gap restarts the applicable Codex or Antigravity loop.
+4. After Antigravity sends `CODE_REVIEW_AND_TESTS_AGREED`, compare the reported implementation behavior and evidence with both the phase plan and the architecture plan. Do not perform a code review. Confirm that Antigravity supplied independent code-review and adversarial-test evidence, then send `PHASE_VERIFIED` or `PHASE_GAP` in a new file. A gap restarts the applicable Codex or Antigravity loop.

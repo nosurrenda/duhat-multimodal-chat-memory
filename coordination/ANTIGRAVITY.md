@@ -2,7 +2,7 @@
 
 ## Role
 
-Antigravity implements the frontend against Codex's agreed backend contract, owns integration and user-facing testing, and drives defects to resolution with Codex. Antigravity is an independent test author, not merely a runner of Codex's tests. All communication uses new, immutable Markdown files inside the active turn folder in `coordination/messages/`.
+Antigravity implements the frontend against Codex's agreed backend contract, owns independent code review, integration, and user-facing testing, and drives defects to resolution with Codex. Antigravity is an independent test author, not merely a runner of Codex's tests. All communication uses new, immutable Markdown files inside the active turn folder in `coordination/messages/`.
 
 ## Communication Protocol
 
@@ -17,11 +17,12 @@ Never append a shared log to this file or edit another agent's message. Each use
 ## Frontend and Test Loop
 
 1. Implement the UI using the agreed API/data contract and the repository's existing frontend conventions.
-2. Write an independent adversarial test plan from the architecture plan, phase acceptance criteria, API contract, raw fixtures, and expected user behavior before inspecting Codex's test suite. Do not treat Codex-authored tests as sufficient evidence.
-3. Add or update independent tests under `tests/antigravity/`. Include black-box happy paths, negative/authorization cases, malformed or boundary inputs, regressions for every fixed defect, and at least one case intended to break each important acceptance criterion.
-4. Codex may read a failing Antigravity test to diagnose the product, but must not weaken its assertion, change its fixture, skip it, or mark it expected to fail. Only Antigravity changes these tests; changes require a new message explaining why the product contract changed.
-5. Run both Codex's checks and Antigravity's independent suite. Send a new message with the independent test plan, exact commands, results, browser/device coverage when applicable, and manual verification.
-6. For a backend/API defect, send Codex a `BACKEND_FIX_REQUESTED` message with reproduction steps, expected/actual behavior, and evidence. Retest after Codex replies with a fix.
-7. For a frontend/test defect, fix it and send updated evidence in a new message.
-8. When all acceptance criteria pass, send `FRONTEND_AND_TESTS_AGREED` to Claude for final plan verification. That status requires independent-test evidence, not only a passing Codex suite.
-9. If Claude sends `PHASE_GAP` or `PLAN_GAP`, implement or test the requested correction and repeat the relevant loop.
+2. Review Codex's changed backend code against the active phase plan and architecture constraints before relying on its tests. Inspect correctness, security/scope, error handling, data integrity, config behavior, observability, and missing tests. Record findings in a new `CODE_REVIEW` message.
+3. Write an independent adversarial test plan from the architecture plan, phase acceptance criteria, API contract, raw fixtures, and expected user behavior before inspecting Codex's test suite. Do not treat Codex-authored tests as sufficient evidence.
+4. Add or update independent tests under `tests/antigravity/`. Include black-box happy paths, negative/authorization cases, malformed or boundary inputs, regressions for every fixed defect, and at least one case intended to break each important acceptance criterion.
+5. Codex may read a failing Antigravity test to diagnose the product, but must not weaken its assertion, change its fixture, skip it, or mark it expected to fail. Only Antigravity changes these tests; changes require a new message explaining why the product contract changed.
+6. Run both Codex's checks and Antigravity's independent suite. Send a new message with code-review findings, the independent test plan, exact commands, results, browser/device coverage when applicable, and manual verification.
+7. For a backend/API defect, send Codex a `BACKEND_FIX_REQUESTED` message with reproduction steps, expected/actual behavior, and evidence. Retest after Codex replies with a fix.
+8. For a frontend/test defect, fix it and send updated evidence in a new message.
+9. When all acceptance criteria pass, send `CODE_REVIEW_AND_TESTS_AGREED` to Claude for final plan verification. That status requires no unresolved code-review finding and independent-test evidence, not only a passing Codex suite.
+10. If Claude sends `PHASE_GAP` or `PLAN_GAP`, implement or test the requested correction and repeat the relevant loop.

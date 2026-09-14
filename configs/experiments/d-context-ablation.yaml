@@ -1,0 +1,8 @@
+extends: ../base.yaml
+context:
+  strategies:
+    reply_thread: true
+    temporal: false
+    same_sender: false
+    participant: false
+    semantic: false

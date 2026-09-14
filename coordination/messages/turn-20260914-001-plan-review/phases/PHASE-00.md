@@ -2,8 +2,8 @@
 
 # Phase 0: Skeleton and Contracts
 
-- Architecture reference: `../PLAN.md` (revision 6, `ARCHITECTURE_UPDATED`)
-- Phase plan revision: `6`
+- Architecture reference: `../PLAN.md` (revision 7, `ARCHITECTURE_UPDATED`)
+- Phase plan revision: `7`
 - Status: `PHASE_PLAN_UPDATED`
 - In reply to: `../20260914-161517-CODEX-CLAUDE-PHASE_REVIEW.md`
 - Owner: **split** — `Codex` for backend after `PHASE_APPROVED`; `Antigravity` for `frontend/` scaffold and V9 (Phase 0 parallel-work exception)
@@ -159,7 +159,7 @@ tests/
 
 **Independent Antigravity testing**
 
-Antigravity owns V9 and must create its own toolchain-focused adversarial checks under `tests/antigravity/`, rather than only rerunning Codex checks. For Phase 0, this includes a clean frontend build, a failing-build fixture or deliberate invalid import check, and a regression test for every frontend scaffold defect it fixes.
+Antigravity first reviews Codex's Phase 0 changes for contract violations, secret handling, config/hash correctness, rollback safety, and missing tests. It then owns V9 and must create its own toolchain-focused adversarial checks under `tests/antigravity/`, rather than only rerunning Codex checks. For Phase 0, this includes a clean frontend build, a failing-build fixture or deliberate invalid import check, and a regression test for every frontend scaffold defect it fixes. Claude receives only Antigravity's combined code-review and independent-test evidence for final verification.
 
 **Automated checks**
 

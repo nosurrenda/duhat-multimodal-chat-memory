@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 DATED_MODEL_ID = re.compile(r".+-\d{8}$")
-ENDPOINT_TAG = re.compile(r"^[a-z0-9][a-z0-9-]*(?:/[a-z0-9][a-z0-9-]*){1,2}$")
+ENDPOINT_TAG = re.compile(r"^[a-z0-9][a-z0-9-]*(?:/[a-z0-9][a-z0-9-]*){0,2}$")
 
 
 class StrictModel(BaseModel):
@@ -33,6 +33,7 @@ class RetryPolicy(StrictModel):
 
 class RoleModel(StrictModel):
     model_id: str
+    requires_dated_model_id: bool = False
     prompt_version: str
     json_schema_ref: str
     structured_output_required: bool = True
@@ -46,10 +47,26 @@ class LlmContract(StrictModel):
     roles: dict[str, RoleModel]
 
 
+class Bm25sFieldWeighting(StrictModel):
+    body: float = Field(ge=0)
+
+
+class Bm25sConfig(StrictModel):
+    version: str
+    analyzer: str
+    tokenizer: str
+    k1: float = Field(ge=0)
+    b: float = Field(ge=0, le=1)
+    document_unit: Literal["message"]
+    field_weighting: Bm25sFieldWeighting
+    tie_order: str
+    score_normalization: str
+
+
 class RetrievalConfig(StrictModel):
     top_k: int = Field(default=20, ge=1)
     bm25_dense_weights: tuple[float, float] = (0.5, 0.5)
-    bm25s: dict[str, Any]
+    bm25s: Bm25sConfig
 
 
 class EmbeddingsConfig(StrictModel):
@@ -57,8 +74,16 @@ class EmbeddingsConfig(StrictModel):
     visual_model: str
 
 
+class ContextStrategies(StrictModel):
+    reply_thread: bool
+    temporal: bool
+    same_sender: bool
+    participant: bool
+    semantic: bool
+
+
 class ContextConfig(StrictModel):
-    strategies: dict[str, bool]
+    strategies: ContextStrategies
     context_window: int = Field(default=8, ge=1)
     token_budget: int = Field(default=4000, ge=1)
 
@@ -107,6 +132,6 @@ class AppConfig(StrictModel):
                 raise ValueError(f"release role {role_name} requires allow_fallbacks=false")
             if not provider.has_exact_endpoint():
                 raise ValueError(f"release role {role_name} requires one exact provider endpoint")
-            if DATED_MODEL_ID.fullmatch(role.model_id) is None and not provider.has_exact_endpoint():
-                raise ValueError(f"release role {role_name} requires a dated model id or exact endpoint")
+            if role.requires_dated_model_id and DATED_MODEL_ID.fullmatch(role.model_id) is None:
+                raise ValueError(f"release role {role_name} requires a dated model id")
         return self
