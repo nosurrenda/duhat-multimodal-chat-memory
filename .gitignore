@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Secrets — never commit. .env.example IS tracked.
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Raw corpus: 1.8GB, and H2HMEM carries its own nested .git + LFS objects.
+# PLAN.md commits source media IDs, content_sha256 and checksums, never binaries.
+data/raw/
+
+# Generated artifacts, rebuildable from raw per hard constraint 7.
+data/processed/
+
+# Run outputs: dev runs are disposable, release manifests are committed evidence.
+# runs/ is NOT ignored wholesale — see PHASE-00.md S3.
+runs/dev/
+
+# OS
+.DS_Store

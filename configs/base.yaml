@@ -1,0 +1,36 @@
+mode: dev
+comparable: false
+llm_contract_file: llm.yaml
+retrieval:
+  top_k: 20
+  bm25_dense_weights: [0.5, 0.5]
+  bm25s:
+    version: pinned-by-lockfile
+    analyzer: unicode_word
+    tokenizer: unicode_word
+    k1: 1.2
+    b: 0.75
+    document_unit: message
+    field_weighting: {body: 1.0}
+    tie_order: media_id
+    score_normalization: min_max
+embeddings:
+  text_embedding_model: bge-m3
+  visual_model: siglip2-pinned-in-phase-1.5
+context:
+  strategies: {reply_thread: true, temporal: true, same_sender: true, participant: true, semantic: true}
+  context_window: 8
+  token_budget: 4000
+controller:
+  clue_extraction_strategy: deterministic_first
+  jump_query_strategy: evidence_driven
+  max_rounds: 3
+  max_jumps: 2
+dataset:
+  dup_threshold: 0.95
+  phash_threshold: 8
+  split_salt: phase-2-to-be-set
+  review_salt: phase-2-to-be-set
+scope:
+  default_deny: true
+  default_caller_id: null
