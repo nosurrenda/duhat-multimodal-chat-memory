@@ -20,9 +20,11 @@ data/raw/
 # Generated artifacts, rebuildable from raw per hard constraint 7.
 data/processed/
 
-# Run outputs: dev runs are disposable, release manifests are committed evidence.
-# runs/ is NOT ignored wholesale — see PHASE-00.md S3.
-runs/dev/
+# Run outputs are machine artifacts: local, regenerable, and they go stale.
+# A committed capability snapshot (live prices, latency, catalogue size) would
+# look authoritative while rotting. Durable conclusions live in STATUS.md with
+# a date; the manifest still binds a run to its artifact by local checksum.
+runs/
 
 # OS
 .DS_Store
