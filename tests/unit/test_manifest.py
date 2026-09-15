@@ -1,3 +1,4 @@
+import hashlib
 import json
 from importlib.metadata import version
 from pathlib import Path
@@ -44,5 +45,29 @@ def test_release_manifest_uses_release_directory(tmp_path: Path) -> None:
     payload = config.model_dump(mode="python")
     payload.update({"mode": "release", "comparable": True})
     payload["llm"]["roles"] = roles
-    output = write_manifest(AppConfig.model_validate(payload), tmp_path)
+    artifact = tmp_path / "capability.json"
+    artifact.write_text('{"probes": [{"status": "pass"}]}\n', encoding="utf-8")
+    checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    output = write_manifest(
+        AppConfig.model_validate(payload),
+        tmp_path,
+        capability_artifact_path=artifact,
+        capability_sha256=checksum,
+    )
     assert output.parent.parent.name == "release"
+    written = json.loads(output.read_text())
+    assert written["capability_sha256"] == checksum
+
+
+def test_release_manifest_rejects_missing_or_tampered_capability_artifact(tmp_path: Path) -> None:
+    config = load_config(ROOT / "configs/base.yaml")
+    payload = config.model_dump(mode="python")
+    payload.update({"mode": "release", "comparable": True})
+    roles = {
+        name: role.model_copy(update={"provider": role.provider.model_copy(update={"allow_fallbacks": False, "require_parameters": True})})
+        for name, role in config.llm.roles.items()
+    }
+    payload["llm"]["roles"] = roles
+    release = AppConfig.model_validate(payload)
+    with pytest.raises(ValueError, match="requires capability artifact"):
+        write_manifest(release, tmp_path)

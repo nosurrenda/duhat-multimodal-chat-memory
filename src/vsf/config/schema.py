@@ -34,6 +34,7 @@ class RetryPolicy(StrictModel):
 class RoleModel(StrictModel):
     model_id: str
     requires_dated_model_id: bool = False
+    max_input_tokens: int = Field(default=8192, ge=1)
     prompt_version: str
     json_schema_ref: str
     structured_output_required: bool = True

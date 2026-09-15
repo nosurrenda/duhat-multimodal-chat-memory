@@ -253,15 +253,18 @@ def test_v8_secret_hygiene_in_manifest(tmp_path: Path) -> None:
 
 def test_v6_manifest_placement_and_git_commit(tmp_path: Path) -> None:
     """V6 & S3: Dev runs land in runs/dev, release in runs/release, and git_commit is populated from HEAD."""
+    import hashlib
+    import json
+
     config = load_config(ROOT / "configs/base.yaml")
-    
+
     # Dev run
     dev_path = write_manifest(config, tmp_path)
     assert dev_path.parent.parent.name == "dev"
     manifest_data = dev_path.read_text(encoding="utf-8")
     assert '"git_commit": "' in manifest_data
-    
-    # Release run
+
+    # Release run setup
     roles = {
         name: role.model_copy(
             update={
@@ -276,8 +279,44 @@ def test_v6_manifest_placement_and_git_commit(tmp_path: Path) -> None:
     payload.update({"mode": "release", "comparable": True})
     payload["llm"]["roles"] = roles
     rel_config = AppConfig.model_validate(payload)
-    rel_path = write_manifest(rel_config, tmp_path)
+
+    # Negative check (Phase 0.5 / W12 contract): Release run without capability artifact fails closed
+    with pytest.raises(ValueError, match="release manifest requires capability artifact path and checksum"):
+        write_manifest(rel_config, tmp_path)
+
+    # Negative check: Missing capability artifact file fails closed
+    with pytest.raises(ValueError, match="capability artifact"):
+        write_manifest(
+            rel_config,
+            tmp_path,
+            capability_artifact_path=tmp_path / "nonexistent.json",
+            capability_sha256="0" * 64,
+        )
+
+    # Negative check: Release run with wrong checksum fails closed
+    artifact = tmp_path / "capability.json"
+    artifact.write_text('{"capability_schema_version": "1.0.0", "status": "pass", "probes": [{"status": "pass"}]}\n', encoding="utf-8")
+    actual_checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="capability artifact checksum does not match"):
+        write_manifest(
+            rel_config,
+            tmp_path,
+            capability_artifact_path=artifact,
+            capability_sha256="0" * 64,
+        )
+
+    # Positive check: Valid release run with verified capability artifact
+    rel_path = write_manifest(
+        rel_config,
+        tmp_path,
+        capability_artifact_path=artifact,
+        capability_sha256=actual_checksum,
+    )
     assert rel_path.parent.parent.name == "release"
+    rel_data = json.loads(rel_path.read_text(encoding="utf-8"))
+    assert rel_data["git_commit"] is not None
+    assert rel_data["capability_sha256"] == actual_checksum
+    assert rel_data["capability_artifact_path"] == str(artifact)
 
 
 def test_v2_experiments_directory_discovery() -> None:

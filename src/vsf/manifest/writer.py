@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -34,10 +35,42 @@ def _current_git_commit() -> str | None:
         return None
 
 
-def write_manifest(config: AppConfig, run_root: str | Path, git_commit: str | None = None) -> Path:
+def _verify_capability_artifact(path: str | Path, expected_sha256: str) -> Path:
+    """Bind release evidence to an intact, successful capability artifact before publishing a manifest."""
+    artifact_path = Path(path)
+    try:
+        payload = artifact_path.read_bytes()
+    except FileNotFoundError as err:
+        raise ValueError(f"release manifest requires an existing capability artifact file: '{artifact_path}' not found") from err
+    actual_sha256 = hashlib.sha256(payload).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise ValueError("capability artifact checksum does not match the release manifest")
+    artifact = json.loads(payload)
+    if artifact.get("status") == "invalid_for_release" or any(
+        probe.get("status") != "pass" for probe in artifact.get("probes", [])
+    ):
+        raise ValueError("release manifest requires a successful capability artifact")
+    return artifact_path
+
+
+def write_manifest(
+    config: AppConfig,
+    run_root: str | Path,
+    git_commit: str | None = None,
+    capability_artifact_path: str | Path | None = None,
+    capability_sha256: str | None = None,
+) -> Path:
     snapshot = config.model_dump(mode="json")
     _assert_no_secret(snapshot)
     run_id = str(uuid4())
+    run_kind = "release" if config.mode == "release" else "dev"
+    if run_kind == "release" and (capability_artifact_path is None or capability_sha256 is None):
+        raise ValueError("release manifest requires capability artifact path and checksum")
+    verified_artifact = (
+        _verify_capability_artifact(capability_artifact_path, capability_sha256)
+        if capability_artifact_path is not None and capability_sha256 is not None
+        else None
+    )
     manifest = {
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
@@ -59,10 +92,11 @@ def write_manifest(config: AppConfig, run_root: str | Path, git_commit: str | No
         "resolved_provider": None,
         "resolved_endpoint": None,
         "resolved_quantization": None,
+        "capability_artifact_path": str(verified_artifact) if verified_artifact else None,
+        "capability_sha256": capability_sha256,
         "status": "created",
     }
     _assert_no_secret(manifest)
-    run_kind = "release" if config.mode == "release" else "dev"
     destination = Path(run_root) / run_kind / run_id
     destination.mkdir(parents=True, exist_ok=False)
     output = destination / "manifest.json"

@@ -20,6 +20,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not capability'"
+markers = ["capability: explicitly enabled live OpenRouter capability probe"]
 
 [tool.ruff]
 line-length = 100

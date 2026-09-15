@@ -1,4 +1,10 @@
-.PHONY: up down test lint config-hash dev-reset
+.PHONY: up down test lint config-hash dev-reset env
+
+env:
+	@test ! -e .env || (echo ".env already exists; refusing to overwrite" && exit 1)
+	@cp .env.example .env
+	@chmod 600 .env
+	@echo "Created .env"
 
 up:
 	docker compose up -d
