@@ -493,6 +493,19 @@ Không phải mọi next round đều là multi-hop. Một round chỉ được 
 V1 nên giới hạn khoảng 2–3 round tổng cộng.
 Đây là một retrieval controller có action set hữu hạn, không phải general ReAct agent.
 
+### Hai kiến trúc được đo đối chứng
+
+Câu trên là một **luận điểm kiến trúc**, không phải một sự thật đã được chứng minh. V1 vì vậy xây cả hai và đo:
+
+- **Config D** — bounded controller mô tả ở §11 và §14: action set hữu hạn, 2–3 round, clue extraction và jump gate viết tay.
+- **Config E** — agent loop một tầng: LLM tool-calling trên history tuyến tính, budget cứng (8 tool call, 6 turn, 20 giây), hết budget thì buộc `submit_answer` với confidence thấp.
+
+Hai bên dùng **chung** các retrieval primitive, chung permission scope resolve trước khi retrieval, và chung bộ metric. Không bên nào bị xóa; cả hai nằm sau config flag. Không multi-agent, không thêm framework agent.
+
+Trong Config E, Bridge Resolver không còn là một stage riêng. Nó trở thành hai phần: hướng dẫn trong prompt, và validator của `submit_answer`. **Validator chỉ chặn id bịa** — nó chứng minh một id từng xuất hiện trong kết quả tool của chính run đó, chứ không chứng minh ảnh thật sự thỏa ràng buộc context. Độ đúng của bridge vẫn đo bằng **Bridge Recall**, cho cả hai kiến trúc.
+
+Nếu Config E ngang hoặc hơn Config D, đó là một kết quả âm đáng giá đối với chính luận điểm của tài liệu này — và benchmark tồn tại để tìm ra điều đó.
+
 ---
 
 ## 15. Long-range context

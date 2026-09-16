@@ -9,6 +9,7 @@ dependencies = [
   "fastapi>=0.115,<1",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
+  "psycopg[binary]>=3.2,<4",
   "PyYAML>=6.0,<7",
 ]
 

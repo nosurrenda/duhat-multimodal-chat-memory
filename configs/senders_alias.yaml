@@ -1,0 +1,5 @@
+# Ambiguous names are frozen data, not normalizer heuristics.
+aliases:
+  "维基": "Vicky"
+  "Gian": "Giant"
+  "D_AhJie": "Ajie"

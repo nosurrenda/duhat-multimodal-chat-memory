@@ -1,0 +1,28 @@
+{
+  "_comment": "F-035. The 23 (dialogue, raw_mention) pairs a naive @\\w+ matcher fails to resolve. Committed so an independent test author can assert against a visible oracle. 'expected' is the canonical sender_id after alias resolution; null means correctly unresolvable.",
+  "cases": [
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "Big",      "occurrences": 63, "full_form": "@Big Liu",        "expected": "liucixin",   "reason": "truncation; 大刘 is Liu Cixin"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "阿杰",      "occurrences": 49, "full_form": "@阿杰",             "expected": "ajie",       "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue3", "raw_mention": "老孟",      "occurrences": 40, "full_form": "@老孟",             "expected": "oldmeng",    "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue3", "raw_mention": "Yuzu",     "occurrences": 38, "full_form": "@Yuzu",            "expected": "pomelo",     "reason": "柚子 = pomelo"},
+    {"dialogue": "multi-party/dialogue5", "raw_mention": "小白",      "occurrences": 35, "full_form": "@小白",             "expected": "xiaobai",    "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue5", "raw_mention": "David",    "occurrences": 30, "full_form": "@David",           "expected": "dawei",      "reason": "anglicised 大伟; Dawei never sends @David"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "Coach",    "occurrences": 27, "full_form": "@Coach Zhang",     "expected": "zhangjiaotou", "reason": "truncation; 教头 = coach"},
+    {"dialogue": "multi-party/dialogue5", "raw_mention": "Fat",      "occurrences": 22, "full_form": "@Fat Tiger",       "expected": "giant",      "reason": "truncation; 胖虎 = Gian/Giant. Neither Gian nor Giant ever sends it"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "DaLiu",    "occurrences": 10, "full_form": "@DaLiu",           "expected": "liucixin",   "reason": "大刘"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "林森",      "occurrences": 9,  "full_form": "@林森",             "expected": "linsen",     "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "Old",      "occurrences": 6,  "full_form": "@Old Lin",         "expected": "linsen",     "reason": "truncation; 老林"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "小皮",      "occurrences": 6,  "full_form": "@小皮",             "expected": "xiaopi",     "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "Everyone", "occurrences": 6,  "full_form": "@Everyone",        "expected": null,         "reason": "broadcast pseudo-speaker; no relation"},
+    {"dialogue": "multi-party/dialogue3", "raw_mention": "Everyone", "occurrences": 5,  "full_form": "@Everyone",        "expected": null,         "reason": "broadcast pseudo-speaker; no relation"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "大刘",      "occurrences": 4,  "full_form": "@大刘",             "expected": "liucixin",   "reason": "CJK form"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "苏浅",      "occurrences": 2,  "full_form": "@苏浅",             "expected": "suqian",     "reason": "CJK transliteration"},
+    {"dialogue": "multi-party/dialogue5", "raw_mention": "大伟",      "occurrences": 2,  "full_form": "@大伟",             "expected": "dawei",      "reason": "CJK form"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "Teacher",  "occurrences": 1,  "full_form": "@Teacher Lin Sen", "expected": "linsen",     "reason": "truncation; honorific"},
+    {"dialogue": "multi-party/dialogue1", "raw_mention": "阿Jie",     "occurrences": 1,  "full_form": "@阿Jie",            "expected": "ajie",       "reason": "mixed-script variant"},
+    {"dialogue": "multi-party/dialogue3", "raw_mention": "柚子",      "occurrences": 1,  "full_form": "@柚子",             "expected": "pomelo",     "reason": "CJK form"},
+    {"dialogue": "multi-party/dialogue3", "raw_mention": "everyone", "occurrences": 1,  "full_form": "@everyone",        "expected": null,         "reason": "broadcast pseudo-speaker; case variant"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "桃子的",     "occurrences": 1,  "full_form": "@桃子的",            "expected": "peach",      "reason": "over-capture of possessive 的; 桃子 = Peach"},
+    {"dialogue": "multi-party/dialogue2", "raw_mention": "Daliu",    "occurrences": 1,  "full_form": "@Daliu",           "expected": "liucixin",   "reason": "case variant of DaLiu"}
+  ]
+}

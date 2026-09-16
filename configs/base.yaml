@@ -16,7 +16,7 @@ retrieval:
     score_normalization: min_max
 embeddings:
   text_embedding_model: bge-m3
-  visual_model: siglip2-pinned-in-phase-1.5
+  visual_model: siglip2-base-patch16-384
 context:
   strategies: {reply_thread: true, temporal: true, same_sender: true, participant: true, semantic: true}
   context_window: 8
