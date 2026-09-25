@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from model_service import app
 
 
@@ -33,10 +30,23 @@ def test_append_preserves_header_order_and_inline_media(monkeypatch) -> None:
     assert second.assembled_text == "[conversation:demo_channel] [day:2026-09-23]\nan: hello [image:img-1]\nbinh: reply"
 
 
-def test_lexical_rebuild_is_idempotent_and_keeps_prior_chunks(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(app, "_LEXICAL_ROOT", tmp_path / "lexical")
-    app.index_lexical(app.LexicalRequest(chunk_id="chunk-a", text="blockchain wallet"))
-    app.index_lexical(app.LexicalRequest(chunk_id="chunk-b", text="restaurant photo"))
-    app.index_lexical(app.LexicalRequest(chunk_id="chunk-a", text="blockchain wallet"))
-    current = json.loads((tmp_path / "lexical" / "current.json").read_text(encoding="utf-8"))
-    assert current["chunk_ids"] == ["chunk-a", "chunk-b"]
+def test_embed_image_reads_the_configured_object_and_normalizes(monkeypatch) -> None:
+    from io import BytesIO
+
+    import torch
+    from PIL import Image
+
+    image = Image.new("RGB", (2, 2), color="red")
+    content = BytesIO()
+    image.save(content, format="PNG")
+
+    class _Model:
+        def get_image_features(self, **_inputs):
+            return torch.ones((1, 768))
+
+    monkeypatch.setattr(app, "_load_object", lambda reference: content.getvalue())
+    monkeypatch.setattr(app, "_load_vision_model", lambda: (lambda **_kwargs: {}, _Model(), "fixture-revision"))
+    response = app.embed_image(app.ImageEmbeddingRequest(media_id="m1", storage_object_ref="drafts/m1"))
+    assert response.model_version == "fixture-revision"
+    assert len(response.vector) == 768
+    assert round(sum(value * value for value in response.vector), 6) == 1.0

@@ -1,27 +1,23 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import os
-import shutil
-import tempfile
-from pathlib import Path
+from io import BytesIO
 from threading import Lock
 
-import bm25s
 import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoProcessor, AutoTokenizer
 
 app = FastAPI(title="VSF local model service")
 
 _MODEL_NAME = os.environ.get("TEXT_EMBEDDING_MODEL", "BAAI/bge-m3")
-_LEXICAL_ROOT = Path(os.environ.get("LEXICAL_INDEX_ROOT", "data/indexes/lexical"))
 _models_lock = Lock()
-_lexical_lock = Lock()
 _tokenizer = None
 _text_model = None
+_vision_model = None
+_vision_processor = None
+_vision_model_version = None
 
 
 class ExistingChunk(BaseModel):
@@ -60,9 +56,14 @@ class TextEmbeddingResponse(BaseModel):
     vector: list[float]
 
 
-class LexicalRequest(BaseModel):
-    chunk_id: str
-    text: str
+class ImageEmbeddingRequest(BaseModel):
+    media_id: str
+    storage_object_ref: str
+
+
+class ImageEmbeddingResponse(BaseModel):
+    model_version: str
+    vector: list[float]
 
 
 def _load_tokenizer():
@@ -79,6 +80,39 @@ def _load_text_model():
         if _text_model is None:
             _text_model = AutoModel.from_pretrained(_MODEL_NAME).eval()
         return _text_model
+
+
+def _load_vision_model():
+    """Load the pinned SigLIP image encoder only when a live upload needs it."""
+
+    global _vision_model, _vision_processor, _vision_model_version
+    with _models_lock:
+        if _vision_model is None:
+            model_name = os.environ.get("VISUAL_EMBEDDING_MODEL", "google/siglip2-base-patch16-384")
+            _vision_processor = AutoProcessor.from_pretrained(model_name, local_files_only=True)
+            _vision_model = AutoModel.from_pretrained(model_name, local_files_only=True).eval()
+            _vision_model_version = getattr(_vision_model.config, "_commit_hash", None) or model_name
+        return _vision_processor, _vision_model, _vision_model_version
+
+
+def _load_object(storage_object_ref: str) -> bytes:
+    """Read only the configured local MinIO object; callers never provide a URL."""
+
+    from minio import Minio
+
+    endpoint = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000")
+    client = Minio(
+        endpoint.removeprefix("http://").removeprefix("https://"),
+        access_key=os.environ.get("MINIO_ROOT_USER", "vsf_minio"),
+        secret_key=os.environ.get("MINIO_ROOT_PASSWORD", "vsf_minio_local_only"),
+        secure=endpoint.startswith("https://"),
+    )
+    response = client.get_object(os.environ.get("MINIO_BUCKET", "vsf-media"), storage_object_ref)
+    try:
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
 
 
 def _message_line(message: NewMessage) -> str:
@@ -132,51 +166,27 @@ def embed_text(request: TextEmbeddingRequest) -> TextEmbeddingResponse:
         raise HTTPException(status_code=503, detail={"error_code": "MODEL_UNAVAILABLE", "message": str(error)}) from error
 
 
-def _atomic_json(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
-    temporary.replace(path)
+@app.post("/v1/embed/image", response_model=ImageEmbeddingResponse)
+def embed_image(request: ImageEmbeddingRequest) -> ImageEmbeddingResponse:
+    """Embed a newly bound image without exposing object-store credentials to Go callers."""
 
+    try:
+        from PIL import Image
 
-@app.post("/v1/index/lexical")
-def index_lexical(request: LexicalRequest) -> dict[str, str]:
-    """Rebuild a versioned BM25 artifact from immutable closed chunks.
-
-    The Go worker is deliberately single-threaded. The local lock is retained
-    as a defensive guard for accidental duplicate HTTP callers, not a scaling primitive.
-    """
-
-    with _lexical_lock:
-        try:
-            _LEXICAL_ROOT.mkdir(parents=True, exist_ok=True)
-            docs_path = _LEXICAL_ROOT / "documents.json"
-            documents = json.loads(docs_path.read_text(encoding="utf-8")) if docs_path.exists() else {}
-            documents[request.chunk_id] = request.text
-            _atomic_json(docs_path, documents)
-            ordered_ids = sorted(documents)
-            corpus = [documents[chunk_id] for chunk_id in ordered_ids]
-            tokenized = bm25s.tokenize(corpus, stopwords=None, show_progress=False)
-            index = bm25s.BM25(k1=1.2, b=0.75)
-            index.index(tokenized, show_progress=False)
-            version = hashlib.sha256(json.dumps(ordered_ids, separators=(",", ":")).encode()).hexdigest()[:16]
-            versions = _LEXICAL_ROOT / "versions"
-            temporary = Path(tempfile.mkdtemp(prefix="build-", dir=versions if versions.exists() else _LEXICAL_ROOT))
-            try:
-                index.save(temporary, corpus=[{"chunk_id": chunk_id, "text": documents[chunk_id]} for chunk_id in ordered_ids])
-                final = versions / version
-                versions.mkdir(parents=True, exist_ok=True)
-                if not final.exists():
-                    temporary.replace(final)
-                else:
-                    shutil.rmtree(temporary)
-                _atomic_json(_LEXICAL_ROOT / "current.json", {"version": version, "chunk_ids": ordered_ids})
-            except Exception:
-                shutil.rmtree(temporary, ignore_errors=True)
-                raise
-            return {"status": "indexed"}
-        except Exception as error:
-            raise HTTPException(status_code=500, detail={"error_code": "INTERNAL", "message": str(error)}) from error
+        processor, model, model_version = _load_vision_model()
+        with Image.open(BytesIO(_load_object(request.storage_object_ref))) as image:
+            inputs = processor(images=image.convert("RGB"), return_tensors="pt")
+        with torch.inference_mode():
+            vector = model.get_image_features(**inputs)
+            vector = torch.nn.functional.normalize(vector, p=2, dim=1)[0].cpu().tolist()
+        if len(vector) != 768:
+            raise ValueError(f"SigLIP dimension is {len(vector)}, expected 768")
+        return ImageEmbeddingResponse(
+            model_version=model_version,
+            vector=vector,
+        )
+    except Exception as error:
+        raise HTTPException(status_code=503, detail={"error_code": "MODEL_UNAVAILABLE", "message": str(error)}) from error
 
 
 @app.get("/healthz")
