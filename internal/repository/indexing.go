@@ -52,13 +52,26 @@ type TextEmbedding struct {
 	Vector       []float32
 }
 
+// ImageEmbedding is committed independently from text so a vision failure
+// cannot delay a message's acknowledgement or native lexical indexing.
+type ImageEmbedding struct {
+	ModelVersion string
+	Vector       []float32
+}
+
+// PendingMedia is a bound live upload without a durable SigLIP vector.
+type PendingMedia struct {
+	MediaID          string
+	StorageObjectRef string
+}
+
 // IsNoIndexWork keeps sql.ErrNoRows inside the repository ownership boundary.
 func IsNoIndexWork(err error) bool { return errors.Is(err, sql.ErrNoRows) }
 
 // NextIndexMessage resumes unfinished work before new events, matching the
 // single-worker restart contract without introducing worker leases.
 func (s *Store) NextIndexMessage(ctx context.Context) (IndexMessage, string, error) {
-	for _, status := range []string{"lexical_pending", "processing", "pending"} {
+	for _, status := range []string{"processing", "pending"} {
 		var message IndexMessage
 		var mediaJSON []byte
 		err := s.db.QueryRowContext(ctx, `
@@ -148,31 +161,6 @@ FROM chunks WHERE channel_id=$1 AND status='open'`, channelID).Scan(
 	return &chunk, nil
 }
 
-// LexicalChunkForEvent binds restart recovery to the exact immutable chunk that
-// was closed by an event, rather than guessing from a channel's current tail.
-func (s *Store) LexicalChunkForEvent(ctx context.Context, eventID int64) (Chunk, error) {
-	chunk := Chunk{}
-	var messageJSON, mediaJSON []byte
-	err := s.db.QueryRowContext(ctx, `
-SELECT c.first_message_id, c.chunk_id, c.channel_id, c.chunk_index, to_json(c.message_ids),
-       to_json(c.media_ids), c.day, c.text, c.token_count, c.last_feed_ordinal, c.status
-FROM outbox o JOIN chunks c ON c.chunk_id=o.lexical_chunk_id
-WHERE o.event_id=$1 AND o.status='lexical_pending'`, eventID).Scan(
-		&chunk.FirstMessageID, &chunk.ChunkID, &chunk.ChannelID, &chunk.ChunkIndex,
-		&messageJSON, &mediaJSON, &chunk.Day, &chunk.Text, &chunk.TokenCount,
-		&chunk.LastFeedOrdinal, &chunk.Status)
-	if err != nil {
-		return Chunk{}, err
-	}
-	if err := json.Unmarshal(messageJSON, &chunk.MessageIDs); err != nil {
-		return Chunk{}, err
-	}
-	if err := json.Unmarshal(mediaJSON, &chunk.MediaIDs); err != nil {
-		return Chunk{}, err
-	}
-	return chunk, nil
-}
-
 // CompleteOpenAppend atomically records an ordinary append and its completion.
 func (s *Store) CompleteOpenAppend(ctx context.Context, message IndexMessage, assembled AssembledChunk) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -224,26 +212,40 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open')`, message.MessageID, chunkID(mess
 		return err
 	}
 	if message.EventID != 0 {
-		if _, err = tx.ExecContext(ctx, `UPDATE outbox SET status='lexical_pending', lexical_chunk_id=$2, last_error=NULL WHERE event_id=$1`, message.EventID, previous.ChunkID); err != nil {
+		// pg_search updates its index from this same committed row change, so there
+		// is no external lexical publish state between durable steps.
+		if _, err = tx.ExecContext(ctx, `UPDATE outbox SET status='done', processed_at=now(), last_error=NULL WHERE event_id=$1`, message.EventID); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-// MarkIndexed makes done durable only after the file-backed lexical write succeeds.
-func (s *Store) MarkIndexed(ctx context.Context, eventID int64) error {
-	if eventID == 0 {
-		return nil
-	}
-	_, err := s.db.ExecContext(ctx, `UPDATE outbox SET status='done', processed_at=now(), last_error=NULL WHERE event_id=$1 AND status='lexical_pending'`, eventID)
-	return err
+// NextPendingMedia selects only live uploads. Seed media are imported from the
+// frozen Phase 1.5 artifact and must never be recomputed by the runtime worker.
+func (s *Store) NextPendingMedia(ctx context.Context) (PendingMedia, error) {
+	media := PendingMedia{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT m.media_id, m.storage_object_ref
+FROM media m
+WHERE m.parent_message_id IS NOT NULL AND m.uploader_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_embeddings e WHERE e.media_id=m.media_id)
+ORDER BY m.created_at, m.media_id
+LIMIT 1`).Scan(&media.MediaID, &media.StorageObjectRef)
+	return media, err
 }
 
-// RecordLexicalFailure leaves the immutable chunk in lexical_pending. Retrying
-// from pending would feed the triggering message through the chunker twice.
-func (s *Store) RecordLexicalFailure(ctx context.Context, eventID int64, cause error) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE outbox SET last_error=$2 WHERE event_id=$1 AND status='lexical_pending'`, eventID, cause.Error())
+// SaveMediaEmbedding is idempotent so the sequential worker can retry an image
+// after an RPC interruption without duplicating its primary-keyed vector row.
+func (s *Store) SaveMediaEmbedding(ctx context.Context, media PendingMedia, embedding ImageEmbedding) error {
+	if len(embedding.Vector) != 768 {
+		return fmt.Errorf("image embedding dimension is %d, want 768", len(embedding.Vector))
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO media_embeddings (media_id, embedding, model_version)
+VALUES ($1,$2::public.vector,$3)
+ON CONFLICT (media_id) DO UPDATE SET embedding=EXCLUDED.embedding, model_version=EXCLUDED.model_version`,
+		media.MediaID, vectorLiteral(embedding.Vector), embedding.ModelVersion)
 	return err
 }
 

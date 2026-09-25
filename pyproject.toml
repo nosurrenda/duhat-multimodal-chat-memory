@@ -9,6 +9,7 @@ dependencies = [
   "fastapi>=0.115,<1",
   "numpy>=2.0,<3",
   "Pillow>=10,<12",
+  "minio>=7.2,<8",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "psycopg[binary]>=3.2,<4",
