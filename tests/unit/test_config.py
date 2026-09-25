@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from vsf.config import AppConfig, load_config
-from vsf.config.hashing import config_hash
+from config import AppConfig, load_config
+from config.hashing import config_hash
 
 ROOT = Path(__file__).parents[2]
 
@@ -13,6 +13,8 @@ ROOT = Path(__file__).parents[2]
 def test_base_config_loads() -> None:
     config = load_config(ROOT / "configs/base.yaml")
     assert config.scope.default_deny is True
+    assert config.visual_expectations.model_name == "google/siglip2-base-patch16-384"
+    assert config.visual_expectations.preprocessing.image_size == (384, 384)
 
 
 def test_hash_is_stable_and_mode_is_semantic() -> None:

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from vsf.config import load_config
-from vsf.config.schema import AppConfig
-from vsf.manifest import write_manifest
+from config import load_config
+from config.schema import AppConfig
+from artifacts.manifest import write_manifest
 
 ROOT = Path(__file__).parents[2]
 

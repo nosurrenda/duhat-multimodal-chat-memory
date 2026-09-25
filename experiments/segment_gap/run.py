@@ -1,7 +1,7 @@
 """Experiment: does silence-gap segmentation help retrieval?
 
 Standalone. Reads data/processed/ and data/raw/ read-only; imports nothing from
-src/vsf and writes nothing outside experiments/segment_gap/out/. No LLM anywhere.
+src and writes nothing outside experiments/segment_gap/out/. No LLM anywhere.
 Retrieval is single-shot: no jump, no multi-round, no agent.
 
 Run:  python experiments/segment_gap/run.py

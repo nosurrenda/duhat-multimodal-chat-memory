@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from vsf.normalization import build_corpus
-from vsf.storage import CanonicalScopedRepository
-from vsf.trace.writer import TraceReader
+from ingest.normalization import build_corpus
+from repository import CanonicalScopedRepository
+from trace.writer import TraceReader
 
 ROOT = Path(__file__).parents[2]
 

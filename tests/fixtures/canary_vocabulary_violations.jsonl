@@ -1,0 +1,4 @@
+{"query_id": "canary_01", "query": "Which pet did he mention in Session 4?", "gold_answer": "A golden retriever."}
+{"query_id": "canary_02", "query": "Find the photo sent during the holiday trip.", "gold_answer": "It is shown in 12.png."}
+{"query_id": "canary_03", "query": "Where was the photo taken?", "gold_answer": "In session2/scene1 near the lake."}
+{"query_id": "canary_04", "query": "In this conversation, who recommended the cafe?", "gold_answer": "Alex recommended it."}

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from vsf.trace import TraceReader, TraceRecord, TraceWriter, compute_metrics, validate_trace
-from vsf.trace.capability import write_capability_artifact
+from trace import TraceReader, TraceRecord, TraceWriter, compute_metrics, validate_trace
+from trace.capability import write_capability_artifact
 
 RUN = "123e4567-e89b-12d3-a456-426614174000"
 QUERY = "q_direct_1"

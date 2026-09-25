@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from vsf.config import load_config
-from vsf.settings import Settings
+from config import load_config
+from config.settings import Settings
 
 ROOT = Path(__file__).parents[2]
 

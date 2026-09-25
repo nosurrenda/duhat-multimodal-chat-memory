@@ -15,16 +15,24 @@ frontend/dist/
 
 # Raw corpus: 1.8GB, and H2HMEM carries its own nested .git + LFS objects.
 # PLAN.md commits source media IDs, content_sha256 and checksums, never binaries.
+data/
 data/raw/
 
 # Generated artifacts, rebuildable from raw per hard constraint 7.
 data/processed/
+data/visual_embeddings/
 
 # Run outputs are machine artifacts: local, regenerable, and they go stale.
 # A committed capability snapshot (live prices, latency, catalogue size) would
 # look authoritative while rotting. Durable conclusions live in STATUS.md with
 # a date; the manifest still binds a run to its artifact by local checksum.
 runs/
+
+# One-off local exploration and data-repair scripts; never application source.
+scratch/
+
+# Reproducible experiment code is tracked; its generated reports and artifacts are not.
+experiments/**/out/
 
 # OS
 .DS_Store

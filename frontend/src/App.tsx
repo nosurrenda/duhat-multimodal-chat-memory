@@ -1,121 +1,36 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState } from 'react'
+import { Composer } from './components/Composer'
+import { Header } from './components/Header'
+import { ImageModal } from './components/ImageModal'
+import { MessageList } from './components/MessageList'
+import { SearchBar } from './components/SearchBar'
+import { useFeed } from './state/useFeed'
 
-function App() {
-  const [count, setCount] = useState(0)
+export const App: React.FC = () => {
+  const { messages, status, isRepairing, error, hasOlder, isLoadingOlder, loadOlder } = useFeed()
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null)
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 antialiased font-sans selection:bg-zinc-800 selection:text-zinc-100">
+      <Header status={status} messageCount={messages.length} isRepairing={isRepairing} />
 
-      <div className="ticks"></div>
+      <SearchBar />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {error && (
+        <div className="mx-4 my-2 px-3 py-2 bg-rose-950/40 border border-rose-900/60 rounded-md text-xs font-mono text-rose-300 max-w-5xl mx-auto flex items-center justify-between">
+          <span>⚠️ {error}</span>
+          <span className="text-rose-400 text-[10px]">Check server on :8080</span>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <main className="flex-1 overflow-hidden flex flex-col max-w-5xl w-full mx-auto">
+        <MessageList messages={messages} onSelectImage={setSelectedMediaId} hasOlder={hasOlder} isLoadingOlder={isLoadingOlder} loadOlder={loadOlder} />
+      </main>
+
+      <Composer />
+
+      <ImageModal mediaId={selectedMediaId} onClose={() => setSelectedMediaId(null)} />
+    </div>
   )
 }
 

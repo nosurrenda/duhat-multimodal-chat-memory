@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
-SOURCE = ROOT / "src/vsf"
+SOURCE = ROOT / "src"
 ALLOWED = SOURCE / "storage/scoped_repository.py"
 
 
@@ -13,12 +13,12 @@ def _raw_import_offenders(source: Path) -> list[Path]:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and "storage._raw" in node.module:
+            if isinstance(node, ast.ImportFrom) and node.module and "repository.raw" in node.module:
                 offenders.append(path)
             if isinstance(node, ast.ImportFrom) and node.level and node.module == "_raw":
                 offenders.append(path)
             if isinstance(node, ast.Import) and any(
-                alias.name.startswith("vsf.storage._raw") for alias in node.names
+                alias.name.startswith("repository.raw") for alias in node.names
             ):
                 offenders.append(path)
     return offenders

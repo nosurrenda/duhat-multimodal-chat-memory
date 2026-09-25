@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from vsf.trace import (
+from trace import (
     TraceRecord,
     TraceWriter,
     compute_metrics,
@@ -11,7 +11,7 @@ from vsf.trace import (
     render_html,
     validate_trace,
 )
-from vsf.trace.capability import write_capability_artifact
+from trace.capability import write_capability_artifact
 
 ROOT = Path(__file__).parents[2]
 RUN_ID = "00000000-0000-0000-0000-000000000001"
@@ -424,7 +424,7 @@ def test_w12_capability_artifact_redacts_secrets(tmp_path: Path) -> None:
 
 def test_w5_full_metric_sufficiency_and_zero_filled_loop_prevention() -> None:
     """W5 & W5b: Verify that all 12 §24 metrics are computed, and loop_prevention_count is zero-filled over all block reasons."""
-    from vsf.trace.records import BLOCK_REASONS
+    from trace.records import BLOCK_REASONS
 
     # Synthetic multi-action trace
     s1 = make_record("01ARZ3NDEKTSV4RRFFQ69G5FE1", "query_started", {})
@@ -659,7 +659,7 @@ def test_w14_and_w15_capability_preflight_and_catalogue() -> None:
     """W14 & W15: Preflight spend cap rejects excessive estimates; catalogue lookup fails closed."""
     from decimal import Decimal
 
-    from vsf.trace.capability import catalogue_requires_dated_id, preflight_cost
+    from trace.capability import catalogue_requires_dated_id, preflight_cost
 
     # Preflight cost under cap
     est = preflight_cost([(1000, Decimal("0.30")), (2000, Decimal("2.50"))], cap_usd=Decimal("0.50"))
@@ -722,7 +722,7 @@ def test_w13_w16_w17_capability_probe_runner(tmp_path: Path) -> None:
     from decimal import Decimal
     from unittest.mock import patch
 
-    from vsf.trace.capability import run_capability_probes
+    from trace.capability import run_capability_probes
 
     artifact_path = tmp_path / "capability.json"
 
@@ -758,7 +758,7 @@ def test_w13_w16_w17_capability_probe_runner(tmp_path: Path) -> None:
             raise OSError("API error containing Bearer sk-secret-in-error-123456")
         return {"provider": endpoint, "choices": [{"message": {"content": "{\"ok\": true}"}}]}
 
-    with patch("vsf.trace.capability._chat_completion", side_effect=mock_chat):
+    with patch("trace.capability._chat_completion", side_effect=mock_chat):
         res = run_capability_probes(
             api_key="test-key",
             model_id="google/gemini-3.8-flash-20260902",
@@ -813,14 +813,14 @@ def test_endpoint_pricing_resolution_fails_closed_when_endpoint_missing() -> Non
     """W17 / M1 Negative: Fails closed when exact endpoint metadata is missing, refusing model-level fallback."""
     from unittest.mock import MagicMock, patch
 
-    from vsf.trace.capability import resolve_endpoint_pricing
+    from trace.capability import resolve_endpoint_pricing
 
     mock_response = MagicMock()
     mock_response.read.return_value = b'{"data": {"endpoints": [{"tag": "other-provider/endpoint", "pricing": {"prompt": "0.0000001", "completion": "0.000001"}}]}}'
     mock_response.__enter__.return_value = mock_response
 
     with (
-        patch("vsf.trace.capability.urlopen", return_value=mock_response),
+        patch("trace.capability.urlopen", return_value=mock_response),
         pytest.raises(ValueError, match="no unambiguous endpoint pricing metadata for endpoint tag 'google-ai-studio' on model 'google/gemini-3.5-flash-lite': found 0 matches"),
     ):
         resolve_endpoint_pricing("test-key", "google/gemini-3.5-flash-lite", "google-ai-studio")
@@ -830,14 +830,14 @@ def test_endpoint_pricing_resolution_fails_closed_on_duplicate_matches() -> None
     """Codex finding: Ambiguity safety requires failing closed when multiple matching tags exist."""
     from unittest.mock import MagicMock, patch
 
-    from vsf.trace.capability import resolve_endpoint_pricing
+    from trace.capability import resolve_endpoint_pricing
 
     mock_response = MagicMock()
     mock_response.read.return_value = b'{"data": {"endpoints": [{"tag": "google-ai-studio", "pricing": {"prompt": "0.0000003", "completion": "0.0000025"}}, {"tag": "google-ai-studio", "pricing": {"prompt": "0.0000001", "completion": "0.000001"}}]}}'
     mock_response.__enter__.return_value = mock_response
 
     with (
-        patch("vsf.trace.capability.urlopen", return_value=mock_response),
+        patch("trace.capability.urlopen", return_value=mock_response),
         pytest.raises(ValueError, match="no unambiguous endpoint pricing metadata for endpoint tag 'google-ai-studio' on model 'google/gemini-3.5-flash-lite': found 2 matches"),
     ):
         resolve_endpoint_pricing("test-key", "google/gemini-3.5-flash-lite", "google-ai-studio")
@@ -847,7 +847,7 @@ def test_endpoint_pricing_resolution_ignores_provider_name_mismatch() -> None:
     """Codex finding: provider_name must not be used as an alternate identity for a pinned endpoint tag."""
     from unittest.mock import MagicMock, patch
 
-    from vsf.trace.capability import resolve_endpoint_pricing
+    from trace.capability import resolve_endpoint_pricing
 
     mock_response = MagicMock()
     # provider_name matches target endpoint, but tag does not match
@@ -855,7 +855,7 @@ def test_endpoint_pricing_resolution_ignores_provider_name_mismatch() -> None:
     mock_response.__enter__.return_value = mock_response
 
     with (
-        patch("vsf.trace.capability.urlopen", return_value=mock_response),
+        patch("trace.capability.urlopen", return_value=mock_response),
         pytest.raises(ValueError, match="no unambiguous endpoint pricing metadata for endpoint tag 'google-ai-studio' on model 'google/gemini-3.5-flash-lite': found 0 matches"),
     ):
         resolve_endpoint_pricing("test-key", "google/gemini-3.5-flash-lite", "google-ai-studio")
@@ -866,13 +866,13 @@ def test_endpoint_pricing_resolution_exact_single_match_succeeds() -> None:
     from decimal import Decimal
     from unittest.mock import MagicMock, patch
 
-    from vsf.trace.capability import resolve_endpoint_pricing
+    from trace.capability import resolve_endpoint_pricing
 
     mock_response = MagicMock()
     mock_response.read.return_value = b'{"data": {"endpoints": [{"tag": "google-ai-studio", "provider_name": "Google AI Studio", "pricing": {"prompt": "0.0000003", "completion": "0.0000025"}}]}}'
     mock_response.__enter__.return_value = mock_response
 
-    with patch("vsf.trace.capability.urlopen", return_value=mock_response):
+    with patch("trace.capability.urlopen", return_value=mock_response):
         pricing = resolve_endpoint_pricing("test-key", "google/gemini-3.5-flash-lite", "google-ai-studio")
 
     assert pricing == {"input_per_million": Decimal("0.30"), "output_per_million": Decimal("2.50")}
@@ -884,11 +884,11 @@ def test_w14_capability_runner_fails_on_catalogue_mismatch(tmp_path: Path) -> No
     from decimal import Decimal
     from unittest.mock import patch
 
-    from vsf.trace.capability import run_capability_probes
+    from trace.capability import run_capability_probes
 
     artifact_path = tmp_path / "unused.json"
     with (
-        patch("vsf.trace.capability.fetch_catalogue", return_value=["google/gemini-3.5-flash-lite"]),
+        patch("trace.capability.fetch_catalogue", return_value=["google/gemini-3.5-flash-lite"]),
         pytest.raises(ValueError, match="configured requires_dated_model_id disagrees with the model catalogue"),
     ):
         run_capability_probes(
@@ -913,14 +913,14 @@ def test_w14_w16_w17_offline_capability_runner(tmp_path: Path) -> None:
     from decimal import Decimal
     from unittest.mock import patch
 
-    from vsf.trace.capability import run_capability_probes
+    from trace.capability import run_capability_probes
 
     artifact_path = tmp_path / "capability_offline.json"
 
     with (
-        patch("vsf.trace.capability.fetch_catalogue", return_value=["google/gemini-3.5-flash-lite", "other-model"]),
+        patch("trace.capability.fetch_catalogue", return_value=["google/gemini-3.5-flash-lite", "other-model"]),
         patch(
-            "vsf.trace.capability._chat_completion",
+            "trace.capability._chat_completion",
             return_value={"provider": "Mock Studio", "choices": [{"message": {"content": "{}"}}]},
         ),
     ):
@@ -972,7 +972,7 @@ def test_w13_w16_w17_live_capability_verification(tmp_path: Path) -> None:
     import json
     from decimal import Decimal
 
-    from vsf.trace.capability import run_capability_probes
+    from trace.capability import run_capability_probes
 
     env_file = ROOT / ".env"
     if not env_file.exists():

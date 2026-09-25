@@ -17,6 +17,9 @@ retrieval:
 embeddings:
   text_embedding_model: bge-m3
   visual_model: siglip2-base-patch16-384
+chunking:
+  max_messages: 20
+  max_tokens: 400
 context:
   strategies: {reply_thread: true, temporal: true, same_sender: true, participant: true, semantic: true}
   context_window: 8
@@ -34,3 +37,18 @@ dataset:
 scope:
   default_deny: true
   default_caller_id: null
+demo:
+  viewer_id: demo_viewer
+  channel_id: demo_channel
+runtime:
+  # Phase 3 supplies a measured value; null deliberately means "not set yet".
+  index_visibility_sla: null
+  draft_media_ttl: 24h
+visual_expectations:
+  expected_device: cpu
+  model_name: google/siglip2-base-patch16-384
+  model_version: f775b65a79762255128c981547af89addcfe0f88
+  preprocessing:
+    image_size: [384, 384]
+    interpolation: bicubic
+    normalization: siglip

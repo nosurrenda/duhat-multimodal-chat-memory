@@ -34,9 +34,9 @@ from typing import Any
 import pytest
 import yaml
 
-from vsf.storage.canonical_repository import CanonicalScopedRepository
-from vsf.trace.records import TraceRecord
-from vsf.trace.writer import TraceReader
+from repository.canonical_repository import CanonicalScopedRepository
+from trace.records import TraceRecord
+from trace.writer import TraceReader
 
 ROOT = Path(__file__).parents[2]
 RAW_DIR = ROOT / "data/raw/H2HMEM"
@@ -190,7 +190,7 @@ def test_x4_dates_exhaustive_and_rejection() -> None:
         assert raw_date in date_mapping, f"Raw date {raw_date!r} in {sf} missing from mapping"
 
     # X4b: parser raises on unmapped string (tested against pipeline parser)
-    from vsf.normalization.pipeline import _parse_date
+    from ingest.normalization.pipeline import _parse_date
     with pytest.raises(ValueError, match="timeline date has no committed mapping"):
         _parse_date("2099-99-99 (unknown convention)", date_mapping)
 
@@ -684,7 +684,7 @@ def test_x18_trace_events_conformance() -> None:
 # =========================================================================
 def test_x19_rebuildability_determinism(tmp_path: Path) -> None:
     """X19: Fresh build is byte-identical to committed data/processed, and second run is deterministic (F-047)."""
-    from vsf.normalization.pipeline import build_corpus
+    from ingest.normalization.pipeline import build_corpus
     out1 = tmp_path / "run1"
     out2 = tmp_path / "run2"
     build_corpus(ROOT, out1)

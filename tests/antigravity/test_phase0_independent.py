@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from vsf.config import AppConfig, load_config
-from vsf.config.hashing import config_hash
-from vsf.manifest import write_manifest
-from vsf.settings import Settings
+from config import AppConfig, load_config
+from config.hashing import config_hash
+from artifacts.manifest import write_manifest
+from config.settings import Settings
 
 ROOT = Path(__file__).parents[2]
 if str(ROOT) not in sys.path:
@@ -57,8 +57,8 @@ def test_v3_hash_determinism_across_processes() -> None:
     code = (
         "import sys; "
         "from pathlib import Path; "
-        "from vsf.config import load_config; "
-        "from vsf.config.hashing import config_hash; "
+        "from config import load_config; "
+        "from config.hashing import config_hash; "
         "c = load_config(Path(sys.argv[1])); "
         "print(config_hash(c.model_dump(mode='json')))"
     )
@@ -181,8 +181,8 @@ def test_v7_storage_boundary_catches_all_import_styles() -> None:
     from tests.architecture.test_storage_boundary import _raw_import_offenders
 
     # Ensure clean production codebase
-    offenders = _raw_import_offenders(ROOT / "src/vsf")
-    assert not offenders, f"Unscoped raw-storage imports in src/vsf: {offenders}"
+    offenders = _raw_import_offenders(ROOT / "src")
+    assert not offenders, f"Unscoped raw-repository imports in src: {offenders}"
 
     # Synthetic check: ensure relative import `from ._raw import ...` is caught
     code_relative = "from ._raw import connection\n"
@@ -387,7 +387,7 @@ def test_n3_bm25s_version_change_alters_hash_and_manifest(monkeypatch: pytest.Mo
     baseline_hash = config_hash(baseline_config.model_dump(mode="json"))
 
     # Mock an updated bm25s version
-    monkeypatch.setattr("vsf.config.loader.version", lambda pkg: "0.2.999" if pkg == "bm25s" else "1.0.0")
+    monkeypatch.setattr("config.loader.version", lambda pkg: "0.2.999" if pkg == "bm25s" else "1.0.0")
     
     mocked_config = load_config(ROOT / "configs/base.yaml")
     assert mocked_config.retrieval.bm25s.version == "0.2.999"
@@ -428,7 +428,7 @@ def test_n4_overlay_inheritance_integrity(tmp_path: Path) -> None:
 
 def test_n5_settings_cwd_independence() -> None:
     """N5: Settings must resolve .env relative to project root, not CWD."""
-    from vsf.settings import PROJECT_ROOT
+    from config.settings import PROJECT_ROOT
     env_file = Settings.model_config.get("env_file")
     assert isinstance(env_file, Path)
     assert env_file.is_absolute()
