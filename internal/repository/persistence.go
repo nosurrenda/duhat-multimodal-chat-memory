@@ -207,6 +207,44 @@ ALTER TABLE outbox ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS last_error TEXT NULL;
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS lexical_chunk_id TEXT NULL;
+-- D75 retires the old external lexical-publish state. Existing legacy rows are
+-- converted only after the native index has been created over the durable text.
+CREATE EXTENSION IF NOT EXISTS pg_search CASCADE;
+-- D73 keeps the mutable tail out of every durable retrieval index. The advisory
+-- transaction lock prevents two demo servers from interleaving a legacy-index
+-- replacement and is automatically released if this migration statement fails.
+DO $$
+DECLARE
+  schema_name TEXT := current_schema();
+  index_name TEXT := quote_ident(schema_name) || '.chunks_bm25';
+  index_predicate TEXT;
+BEGIN
+  PERFORM pg_advisory_xact_lock(759375);
+
+  SELECT pg_get_expr(index_entry.indpred, index_entry.indrelid)
+    INTO index_predicate
+  FROM pg_index index_entry
+  JOIN pg_class index_class ON index_class.oid = index_entry.indexrelid
+  WHERE index_class.oid = to_regclass(index_name);
+
+  -- A legacy non-partial index has a NULL indpred, so it must be replaced too.
+  IF to_regclass(index_name) IS NOT NULL
+     AND (index_predicate IS NULL OR position('status = ''closed''' IN index_predicate) = 0) THEN
+    EXECUTE 'DROP INDEX ' || quote_ident(schema_name) || '.chunks_bm25';
+  END IF;
+
+  IF to_regclass(index_name) IS NULL THEN
+    EXECUTE 'CREATE INDEX chunks_bm25 ON chunks USING paradedb (first_message_id, text) '
+      || 'WITH (key_field = ''first_message_id'') WHERE status=''closed''';
+  END IF;
+END $$;
+UPDATE outbox o SET status='done', processed_at=COALESCE(processed_at, now())
+WHERE o.status='lexical_pending' AND EXISTS (
+  SELECT 1 FROM chunks c WHERE c.chunk_id=o.lexical_chunk_id AND c.status='closed'
+);
+ALTER TABLE outbox DROP CONSTRAINT IF EXISTS outbox_status_check;
+ALTER TABLE outbox ADD CONSTRAINT outbox_status_check
+  CHECK (status IN ('pending','processing','done','dead_letter'));
 -- Legacy development seeds used now() for the demo membership. Keep one active
 -- grant before adding the invariant that prevents a future re-seed from doing so.
 DELETE FROM channel_memberships duplicate

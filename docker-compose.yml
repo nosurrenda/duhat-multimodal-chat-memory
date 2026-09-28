@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # Version-pinned ParadeDB PG16 image. It carries both pgvector and pg_search.
+    image: paradedb/paradedb:v0.25.10-pg16@sha256:0464d03d0c1da3467268f3a306945900112968db9ff8a1076a175ce46b9c2bf8
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-vsf}
       POSTGRES_USER: ${POSTGRES_USER:-vsf}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -129,19 +128,6 @@ func openWorkerIntegrationStore(t *testing.T, schemaPrefix string) (*service.Sto
 	if os.Getenv("VSF_INTEGRATION") != "1" {
 		t.Skip("set VSF_INTEGRATION=1 after docker compose up to run Postgres/MinIO integration controls")
 	}
-	lexicalRoot := filepath.Clean("../../data/indexes/lexical")
-	currentPath := filepath.Join(lexicalRoot, "current.json")
-	docsPath := filepath.Join(lexicalRoot, "documents.json")
-	savedCurrent, _ := os.ReadFile(currentPath)
-	savedDocs, _ := os.ReadFile(docsPath)
-	t.Cleanup(func() {
-		if savedCurrent != nil {
-			_ = os.WriteFile(currentPath, savedCurrent, 0644)
-		}
-		if savedDocs != nil {
-			_ = os.WriteFile(docsPath, savedDocs, 0644)
-		}
-	})
 	baseURL := env("DATABASE_URL", "postgres://vsf:vsf_local_only@localhost:5433/vsf?sslmode=disable")
 	schema := fmt.Sprintf("vsf_%s_%d", schemaPrefix, time.Now().UnixNano())
 	admin, err := sql.Open("pgx", baseURL)
@@ -519,46 +505,92 @@ VALUES ($1, 1, 'processing', 1)`, schema), msgID); err != nil {
 	}
 }
 
-// TestZ5bClosePublishCrashRecovery verifies that a worker restarting after closing
-// a chunk but before publishing to lexical index (status='lexical_pending') completes
-// the publish and marks the outbox row 'done'.
-func TestZ5bClosePublishCrashRecovery(t *testing.T) {
+// TestZ5bCloseTransactionIsAtomic verifies a closing append makes its vector,
+// native pg_search text, and completion visible in one database transaction.
+func TestZ5bCloseTransactionIsAtomic(t *testing.T) {
 	model := client.NewModelService(env("MODEL_SERVICE_URL", "http://127.0.0.1:8090"))
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	store, db, schema := openWorkerIntegrationStore(t, "z5b_lexical")
+	store, db, schema := openWorkerIntegrationStore(t, "z5b_atomic")
 	channelID := "z5b_channel"
 	senderID := "z5b_sender"
-	populateFixtureConversation(t, db, schema, channelID, senderID, 1)
+	populateFixtureConversation(t, db, schema, channelID, senderID, 2)
 
-	msgID := fmt.Sprintf("%s:msg_0", channelID)
-	chunkID := fmt.Sprintf("%s:msg_0-msg_0", channelID)
-
-	// Simulate closed chunk with outbox in lexical_pending
+	firstID := fmt.Sprintf("%s:msg_0", channelID)
+	secondID := fmt.Sprintf("%s:msg_1", channelID)
 	if _, err := db.ExecContext(ctx, fmt.Sprintf(`
-INSERT INTO %s.chunks (first_message_id, chunk_id, channel_id, chunk_index, message_ids, media_ids, day, text, token_count, last_feed_ordinal, status)
-VALUES ($1, $2, $3, 0, ARRAY[$1], ARRAY[]::text[], '2026-09-24', 'test text', 10, 1, 'closed')`, schema), msgID, chunkID, channelID); err != nil {
+INSERT INTO %s.outbox (message_id, feed_ordinal, status, attempt_count)
+VALUES ($1, 1, 'processing', 1)`, schema), firstID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, fmt.Sprintf(`
-INSERT INTO %s.outbox (message_id, feed_ordinal, status, lexical_chunk_id, attempt_count)
-VALUES ($1, 1, 'lexical_pending', $2, 1)`, schema), msgID, chunkID); err != nil {
-		t.Fatal(err)
-	}
-
-	worker := service.NewIndexWorker(store, model, 20, 400)
+	worker := service.NewIndexWorker(store, model, 1, 400)
 	if err := worker.ProcessOne(ctx); err != nil {
-		t.Fatalf("ProcessOne on lexical_pending failed: %v", err)
+		t.Fatalf("initial open append failed: %v", err)
 	}
 
-	// Verify outbox reached 'done'
+	var eventID int64
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`
+	INSERT INTO %s.outbox (message_id, feed_ordinal, status, attempt_count)
+	VALUES ($1, 2, 'processing', 1)`, schema), secondID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT event_id FROM %s.outbox WHERE message_id=$1`, schema), secondID).Scan(&eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.ProcessOne(ctx); err != nil {
+		t.Fatalf("closing append failed: %v", err)
+	}
+
 	var outboxStatus string
-	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT status FROM %s.outbox WHERE message_id = $1`, schema), msgID).Scan(&outboxStatus); err != nil {
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT status FROM %s.outbox WHERE event_id = $1`, schema), eventID).Scan(&outboxStatus); err != nil {
 		t.Fatal(err)
 	}
 	if outboxStatus != "done" {
 		t.Fatalf("expected outbox status 'done', got '%s'", outboxStatus)
+	}
+	var embeddings, lexicalHits, openTailHits int
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT count(*) FROM %s.chunk_embeddings WHERE first_message_id=$1`, schema), firstID).Scan(&embeddings); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT count(*) FROM %s.chunks WHERE status='closed' AND first_message_id=$1 AND text @@@ 'descriptive'`, schema), firstID).Scan(&lexicalHits); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT count(*) FROM %s.chunks WHERE status='open' AND text @@@ 'descriptive'`, schema)).Scan(&openTailHits); err != nil {
+		t.Fatal(err)
+	}
+	if embeddings != 1 || lexicalHits != 1 || openTailHits != 0 {
+		t.Fatalf("closing transaction invariant failed: embeddings=%d lexical_hits=%d open_tail_hits=%d", embeddings, lexicalHits, openTailHits)
+	}
+}
+
+// TestD75LegacyNonPartialIndexIsUpgraded ensures an older D75 database cannot
+// retain an index that would expose mutable open-tail chunks to lexical search.
+func TestD75LegacyNonPartialIndexIsUpgraded(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	store, db, schema := openWorkerIntegrationStore(t, "d75_legacy_index")
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`
+DROP INDEX %s.chunks_bm25;
+CREATE INDEX chunks_bm25 ON %s.chunks USING paradedb (first_message_id, text)
+  WITH (key_field = 'first_message_id');`, schema, schema)); err != nil {
+		t.Fatalf("create legacy non-partial index: %v", err)
+	}
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("upgrade legacy non-partial index: %v", err)
+	}
+
+	var predicate sql.NullString
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`
+SELECT pg_get_expr(index_entry.indpred, index_entry.indrelid)
+FROM pg_index index_entry
+JOIN pg_class index_class ON index_class.oid = index_entry.indexrelid
+WHERE index_class.oid = to_regclass($1)`), schema+".chunks_bm25").Scan(&predicate); err != nil {
+		t.Fatal(err)
+	}
+	if !predicate.Valid || !strings.Contains(predicate.String, "status = 'closed'") {
+		t.Fatalf("expected closed-only partial index after migration, got %q", predicate.String)
 	}
 }
 

@@ -96,8 +96,15 @@ func (c *ModelService) EmbedText(ctx context.Context, firstMessageID, text strin
 	return service.TextEmbedding{ModelVersion: response.ModelVersion, Vector: response.Vector}, nil
 }
 
-func (c *ModelService) IndexLexical(ctx context.Context, chunkID, text string) error {
-	return c.post(ctx, "/v1/index/lexical", map[string]string{"chunk_id": chunkID, "text": text}, &struct{}{})
+func (c *ModelService) EmbedImage(ctx context.Context, mediaID, storageObjectRef string) (service.ImageEmbedding, error) {
+	var response struct {
+		ModelVersion string    `json:"model_version"`
+		Vector       []float32 `json:"vector"`
+	}
+	if err := c.post(ctx, "/v1/embed/image", map[string]string{"media_id": mediaID, "storage_object_ref": storageObjectRef}, &response); err != nil {
+		return service.ImageEmbedding{}, err
+	}
+	return service.ImageEmbedding{ModelVersion: response.ModelVersion, Vector: response.Vector}, nil
 }
 
 func (c *ModelService) post(ctx context.Context, path string, request, response any) error {

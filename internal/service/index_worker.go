@@ -11,11 +11,10 @@ import (
 type IndexModel interface {
 	Append(context.Context, IndexMessage, *Chunk) (AssembledChunk, error)
 	EmbedText(context.Context, string, string) (TextEmbedding, error)
-	IndexLexical(context.Context, string, string) error
+	EmbedImage(context.Context, string, string) (ImageEmbedding, error)
 }
 
-// IndexWorker is deliberately a single sequential loop for the demo. Chunk state and
-// the file-backed lexical artifact therefore have one writer by construction.
+// IndexWorker is deliberately a single sequential loop for the demo.
 type IndexWorker struct {
 	store       *Store
 	model       IndexModel
@@ -48,6 +47,11 @@ func (w *IndexWorker) Run(ctx context.Context) {
 		if err := w.ProcessOne(ctx); err != nil && !IsNoIndexWork(err) {
 			log.Printf("phase 3 index worker: %v", err)
 		}
+		// Image work is independent of the text outbox: a slow or failed SigLIP call
+		// must never delay acknowledgement, chunk closing, or native BM25 visibility.
+		if err := w.ProcessOneImage(ctx); err != nil && !IsNoIndexWork(err) {
+			log.Printf("phase 3 image worker: %v", err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -73,21 +77,24 @@ func (w *IndexWorker) BuildSeed(ctx context.Context) error {
 
 // ProcessOne is exposed for deterministic integration tests and performs no parallel work.
 func (w *IndexWorker) ProcessOne(ctx context.Context) error {
-	message, status, err := w.store.NextIndexMessage(ctx)
+	message, _, err := w.store.NextIndexMessage(ctx)
 	if err != nil {
 		return err
 	}
-	if status == "lexical_pending" {
-		closed, err := w.store.LexicalChunkForEvent(ctx, message.EventID)
-		if err != nil {
-			return w.store.RescheduleIndex(ctx, message.EventID, err)
-		}
-		if err := w.model.IndexLexical(ctx, closed.ChunkID, closed.Text); err != nil {
-			return w.store.RecordLexicalFailure(ctx, message.EventID, err)
-		}
-		return w.store.MarkIndexed(ctx, message.EventID)
-	}
 	return w.processMessage(ctx, message)
+}
+
+// ProcessOneImage retries one live media item independently of text indexing.
+func (w *IndexWorker) ProcessOneImage(ctx context.Context) error {
+	media, err := w.store.NextPendingMedia(ctx)
+	if err != nil {
+		return err
+	}
+	embedding, err := w.model.EmbedImage(ctx, media.MediaID, media.StorageObjectRef)
+	if err != nil {
+		return err
+	}
+	return w.store.SaveMediaEmbedding(ctx, media, embedding)
 }
 
 func (w *IndexWorker) processMessage(ctx context.Context, message IndexMessage) error {
@@ -116,18 +123,12 @@ func (w *IndexWorker) processMessage(ctx context.Context, message IndexMessage) 
 		return err
 	}
 	if w.observer != nil {
-		w.observer.DenseCommitted(message.EventID, time.Now().UTC())
+		committedAt := time.Now().UTC()
+		w.observer.DenseCommitted(message.EventID, committedAt)
+		// Native pg_search indexes the text in this same committed transaction.
+		w.observer.LexicalCommitted(message.EventID, committedAt)
 	}
-	if err := w.model.IndexLexical(ctx, open.ChunkID, open.Text); err != nil {
-		if message.EventID == 0 {
-			return err
-		}
-		return w.store.RecordLexicalFailure(ctx, message.EventID, err)
-	}
-	if w.observer != nil {
-		w.observer.LexicalCommitted(message.EventID, time.Now().UTC())
-	}
-	return w.store.MarkIndexed(ctx, message.EventID)
+	return nil
 }
 
 func (w *IndexWorker) retryOrFail(ctx context.Context, eventID int64, cause error) error {
